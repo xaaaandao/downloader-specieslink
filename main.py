@@ -13,8 +13,10 @@ import sqlalchemy as sa
 
 import requests
 import scrapy
+from requests import session
 
 from scrapy.crawler import CrawlerProcess
+from scrapy.exceptions import CloseSpider
 from scrapy.http import FormRequest
 from scrapy.utils.project import get_project_settings
 
@@ -23,37 +25,53 @@ from models import Record, get_base
 
 
 class SpeciesLink(scrapy.Spider):
-    name = 'specieslink'
-    base_url = 'https://specieslink.net/search/index'
+    name = "specieslink"
+    base_url = "https://specieslink.net/search/index"
     form_data = {
-        'action': 'records',
-        'graph_type': 'horizontalBar',
-        'graph_sort': 'value',
-        'from': '0',
-        'recs_order_by': 'random_order',
-        'dups_mode': 'collect_full_key',
-        'coll_groups': '',
-        'coll_networks': '',
+        "action": "records",
+        "graph_type": "horizontalBar",
+        "graph_sort": "value",
+        "from": "0",
+        "recs_order_by": "random_order",
+        "dups_mode": "collect_full_key",
+        "coll_groups": "",
+        "coll_networks": "",
+        "flags": "photo",
     }
 
-    def __init__(self, barcodes, urls):
-        self.barcodes = barcodes
-        self.urls = urls
+    def __init__(self, session):
+        self.session = session
 
     def start_requests(self):
-        for i, barcode in enumerate(self.barcodes):
-            print('%d-%d' % (i, len(self.barcodes)))
-            self.form_data['barcode'] = barcode
+        start = 0
 
+        while True:
+            print(start)
+            self.form_data["from"] = str(start)
             yield FormRequest(self.base_url,
-                              formdata=self.form_data,
-                              callback=self.parse)
+                                formdata=self.form_data,
+                                callback=self.parse)
+            start = int(start) + 100
+
 
     def parse(self, response):
-        for url in response.xpath('//img/@src').extract():
-            if 'https://storage.googleapis.com/cria-zoomify' in url:
-                if url not in self.urls:
-                    self.urls.append(url)
+        tables = response.xpath("//table[contains(@class, 'recs-table')]")
+        # print(tables)
+        if len(tables) == 0:
+            raise CloseSpider("table is empty!")
+
+        for table_index, table in enumerate(tables):
+            tN_texts = table.xpath(".//span[contains(@class, 'tN')]/text()").extract_first()
+
+            tF_texts = table.xpath(".//span[contains(@class, 'tF')]/text()").extract_first()
+
+            img_srcs = table.xpath(".//img/@src")
+            img_srcs = [i for i in img_srcs.extract() if "https://storage.googleapis.com/cria-zoomify" in i]
+            # print(tN_texts, tF_texts, img_srcs)
+            records = Record(barcode=tN_texts, family=tF_texts, json=None, images=img_srcs)
+            self.session.add(records)
+
+        self.session.commit()
 
 
 def show_tables(engine):
@@ -95,61 +113,13 @@ def main(reino, filo, classe, ordem, familia, genero, epitetoespecifico, epiteto
 
     create_table(engine)
 
-    start = 0
-    limit = 5000
-    while True:
-        url = f"https://specieslink.net/ws/1.0/search?apikey={os.environ["SPLINK"]}&offset={start}&limit={limit}"
 
-        if images:
-            url = url + "&flags=photo"
-
-        print(f"url {url}")
-
-        try:
-            make_request(session, url)
-        except requests.exceptions:
-            break
-
-        start = limit + 1
-        limit = start + 5000
+    process = CrawlerProcess(get_project_settings())
+    process.crawl(SpeciesLink, session=session)
+    process.start()
 
     session.close()
     engine.dispose()
-
-
-def make_request(session, url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        json = response.json()
-        if len(json) > 0:
-            records = [Record(barcode=j["properties"]["barcode"], family=j["properties"]["family"], json=j["properties"]) for j in json["features"] if "properties" in j if has_barcode_and_family(j)]
-            session.add_all(records)
-            session.commit()
-
-
-def has_barcode_and_family(j):
-    return "barcode" in j["properties"] and "family" in j["properties"]
-
-
-# def save_urls(familia, imagens, urls):
-#     df = pd.DataFrame({'urls': urls})
-#     df.to_csv(get_filename('csv', familia, imagens), quoting=2, sep=";")
-#
-#
-# def save_json(family, images, records):
-#     filename = get_filename('json', family, images)
-#     with open(filename, 'w') as file:
-#         json.dump(records, file)
-#
-#
-# def get_filename(extension, family, images):
-#     filename = 'request+family+%s' % family
-#     if images:
-#         filename = filename + '+images'
-#     current_date = datetime.datetime.strftime(datetime.datetime.now(), '%Y+%m+%d')
-#     filename = filename + '+%s.%s' % (current_date, extension)
-#     print('save %s' % filename)
-#     return filename
 
 
 if __name__ == '__main__':
