@@ -15,3 +15,8 @@ class Record(Base):
     id = sa.Column(sa.BigInteger, primary_key=True, autoincrement=True)
     barcode = sa.Column(sa.String, nullable=True)
     family = sa.Column(sa.String, nullable=True)
+    json = sa.Column(sa.JSON, nullable=True)
+
+
+    # def __repr__(self):
+    #     return "Record(barcode=%s,family=%s)"
