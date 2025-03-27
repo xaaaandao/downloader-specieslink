@@ -3,15 +3,35 @@ import os
 import sqlalchemy as sa
 import sqlalchemy.orm
 
-cfg = {
-    'host': 'localhost',
-    'user': os.environ['USERPG'],
-    'password': os.environ['PWDPG']
-}
+from models import get_base, Record
 
-def connect(echo=True):
+
+def show_tables(engine):
+    return sa.inspect(engine).get_table_names()
+
+
+def table_exists(engine, table_name):
+    return True if table_name in show_tables(engine) else False
+
+
+def create_table(engine):
+    tables = [Record]
+    for t in tables:
+        if not table_exists(engine, t.__tablename__):
+            base = get_base()
+            base.metadata.tables[t.__tablename__].create(bind=engine)
+            print(f"create table: {t.__tablename__}")
+        else:
+            print(f"table {t.__tablename__} already exists")
+
+def connect(database="herbario",
+            echo=True,
+            host="localhost",
+            password=os.environ["PWDPG"],
+            port="5432",
+            user=os.environ["USERPG"]):
     try:
-        url = 'postgresql+psycopg2://%s:%s@%s:5432/herbario' % (cfg['user'], cfg['password'], cfg['host'])
+        url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
         engine = sa.create_engine(url, echo=echo, pool_pre_ping=True)
         session = sqlalchemy.orm.sessionmaker(bind=engine)
         session.configure(bind=engine)
@@ -19,4 +39,4 @@ def connect(echo=True):
         if engine.connect():
             return engine, db
     except Exception as e:
-        print('problems with host %s (%s)' % (cfg['host'], e))
+        raise e
