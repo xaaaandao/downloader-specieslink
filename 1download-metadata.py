@@ -6,7 +6,8 @@ import json
 import requests
 
 def create_url(images, limits, start):
-    url = f"https://specieslink.net/ws/1.0/search?apikey={os.environ["SPLINK"]}&offset={start}&limit={limits}"
+    # Is necessary pass kingdom to avoid Fungi and Animale.
+    url = f"https://specieslink.net/ws/1.0/search?apikey={os.environ["SPLINK"]}&offset={start}&limit={limits}&kingdom=Plantae"
 
     if images:
         url = url + "&images=yes"

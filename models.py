@@ -13,6 +13,7 @@ class Record(Base):
 
     id = sa.Column(sa.BigInteger, primary_key=True, autoincrement=True)
     barcode = sa.Column(sa.String, nullable=True)
+    kingdom = sa.Column(sa.String, nullable=True)
     family = sa.Column(sa.String, nullable=True)
     json = sa.Column(sa.JSON, nullable=True)
     images = sa.Column(sa.ARRAY(sa.String()), nullable=True)
