@@ -30,10 +30,11 @@ def main(input):
         if len(data) > 0:
             records = records + [Record(barcode=d["properties"]["barcode"], kingdom=d["properties"]["kingdom"], family=d["properties"]["family"], json=d)
                                  for d in data["features"]
-                                 if "properties" in d and
+                                 if "properties" in d and "barcode" in d["properties"] and
                                  has_family(d) and
                                  has_kingdom(d) and
                                  not has_barcode(d["properties"]["barcode"], session)]
+            
             session.add_all(records)
 
         session.commit()
